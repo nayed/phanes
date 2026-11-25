@@ -29,6 +29,7 @@ pub fn run() {
     state_dir::migrate();
     tauri::Builder::default()
         .manage(cli::parse())
+        .manage(fs::Watching::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -72,6 +73,7 @@ pub fn run() {
             fs::reveal_path,
             fs::open_workspace,
             fs::allow_asset_dir,
+            fs::watch_dirs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Phanes");

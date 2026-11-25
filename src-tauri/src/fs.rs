@@ -1,13 +1,20 @@
 //! All file access of Phanes: reading, writing, listing, creating, renaming,
-//! duplicating, trashing and revealing files. The frontend reaches these
-//! only through `src/lib/fs.ts`. (The file watcher will live here too.)
+//! duplicating, trashing and revealing files, and watching folders for
+//! changes made outside the app. The frontend reaches these only through
+//! `src/lib/fs.ts`.
 
+use std::collections::{BTreeSet, HashSet};
 use std::fs;
 use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
+use notify::event::ModifyKind;
+use notify::{Event, EventKind, EventKindMask, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
 type Result<T> = std::result::Result<T, String>;
 
@@ -275,4 +282,190 @@ fn allow_assets<R: Runtime>(app: &AppHandle<R>, dir: &Path) -> Result<()> {
     app.asset_protocol_scope()
         .allow_directory(dir, true)
         .map_err(|e| e.to_string())
+}
+
+/* ---------- Watching for outside changes ---------- */
+
+/// Emitted with the paths that changed in the watched folders, one event per
+/// burst of changes (`src/state/diskChanges.ts` takes it from there).
+const CHANGED_EVENT: &str = "fs-changed";
+/// A burst ends after this long without a new change…
+const QUIET: Duration = Duration::from_millis(150);
+/// …or after this long in all, so a long one (a `git checkout`) still shows up.
+const MAX_BURST: Duration = Duration::from_secs(1);
+
+/// The folders being watched, and the watcher, started on first use.
+#[derive(Default)]
+pub struct Watching(Mutex<Option<Watched>>);
+
+struct Watched {
+    watcher: RecommendedWatcher,
+    dirs: HashSet<PathBuf>,
+}
+
+/// Watch exactly these folders, each without its subfolders: the workspace
+/// root, its expanded folders and the folders of open files. Watching only
+/// what Phanes shows keeps big trees (`node_modules`) out of it. A folder
+/// that can't be watched (gone) is skipped and tried again next time.
+#[tauri::command]
+pub fn watch_dirs<R: Runtime>(app: AppHandle<R>, watching: State<'_, Watching>, dirs: Vec<String>) -> Result<()> {
+    let mut guard = watching.0.lock().map_err(|_| "The file watcher stopped".to_string())?;
+    if guard.is_none() {
+        let watcher = start_watcher(app).map_err(|e| format!("Cannot watch for changes: {e}"))?;
+        *guard = Some(Watched { watcher, dirs: HashSet::new() });
+    }
+    let Some(watched) = guard.as_mut() else { return Ok(()) };
+    let wanted: HashSet<PathBuf> = dirs.into_iter().map(PathBuf::from).collect();
+    let gone: Vec<PathBuf> = watched.dirs.difference(&wanted).cloned().collect();
+    for dir in gone {
+        let _ = watched.watcher.unwatch(&dir);
+        watched.dirs.remove(&dir);
+    }
+    for dir in wanted {
+        if !watched.dirs.contains(&dir) && watched.watcher.watch(&dir, RecursiveMode::NonRecursive).is_ok() {
+            watched.dirs.insert(dir);
+        }
+    }
+    Ok(())
+}
+
+fn start_watcher<R: Runtime>(app: AppHandle<R>) -> notify::Result<RecommendedWatcher> {
+    let (tx, rx) = mpsc::channel::<Vec<PathBuf>>();
+    let watcher = new_watcher(move |paths| {
+        let _ = tx.send(paths);
+    })?;
+    // Ends when the watcher (and with it the sender) is dropped.
+    std::thread::spawn(move || {
+        batch_changes(&rx, QUIET, MAX_BURST, |paths| {
+            let _ = app.emit(CHANGED_EVENT, paths);
+        })
+    });
+    Ok(watcher)
+}
+
+/// A watcher that hands over the paths of each content change.
+fn new_watcher(on_change: impl Fn(Vec<PathBuf>) + Send + 'static) -> notify::Result<RecommendedWatcher> {
+    // Content and names only: no open/close events, which reading a file
+    // after a change would cause again, and no metadata (permissions, times).
+    let kinds = EventKindMask::CREATE | EventKindMask::REMOVE | EventKindMask::MODIFY_DATA | EventKindMask::MODIFY_NAME;
+    RecommendedWatcher::new(
+        move |event: notify::Result<Event>| {
+            if let Ok(event) = event {
+                if is_content_change(&event.kind) {
+                    on_change(event.paths);
+                }
+            }
+        },
+        notify::Config::default().with_event_kinds(kinds),
+    )
+}
+
+/// Whether an event may change what a folder lists or what a file holds.
+fn is_content_change(kind: &EventKind) -> bool {
+    match kind {
+        EventKind::Create(_) | EventKind::Remove(_) | EventKind::Any | EventKind::Other => true,
+        EventKind::Modify(modify) => !matches!(modify, ModifyKind::Metadata(_)),
+        EventKind::Access(_) => false,
+    }
+}
+
+/// Gather changes into bursts and hand each burst's paths, without
+/// duplicates, to `emit`. Returns when the sending side is gone.
+fn batch_changes(rx: &Receiver<Vec<PathBuf>>, quiet: Duration, max: Duration, mut emit: impl FnMut(Vec<String>)) {
+    while let Ok(first) = rx.recv() {
+        let started = Instant::now();
+        let mut paths: BTreeSet<String> = first.iter().map(|p| path_string(p)).collect();
+        let mut open = true;
+        while started.elapsed() < max {
+            match rx.recv_timeout(quiet) {
+                Ok(more) => paths.extend(more.iter().map(|p| path_string(p))),
+                Err(RecvTimeoutError::Timeout) => break,
+                Err(RecvTimeoutError::Disconnected) => {
+                    open = false;
+                    break;
+                }
+            }
+        }
+        emit(paths.into_iter().collect());
+        if !open {
+            return;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use notify::event::{AccessKind, CreateKind, DataChange, MetadataKind, RenameMode};
+
+    #[test]
+    fn content_changes_count_and_access_or_metadata_do_not() {
+        assert!(is_content_change(&EventKind::Create(CreateKind::File)));
+        assert!(is_content_change(&EventKind::Modify(ModifyKind::Data(DataChange::Any))));
+        assert!(is_content_change(&EventKind::Modify(ModifyKind::Name(RenameMode::To))));
+        assert!(!is_content_change(&EventKind::Access(AccessKind::Any)));
+        assert!(!is_content_change(&EventKind::Modify(ModifyKind::Metadata(MetadataKind::Any))));
+    }
+
+    /// What a real watcher on a temporary folder reports within `wait` after `act`.
+    fn changes_after(dir: &Path, wait: Duration, act: impl FnOnce()) -> BTreeSet<PathBuf> {
+        let (tx, rx) = mpsc::channel();
+        let mut watcher = new_watcher(move |paths| {
+            let _ = tx.send(paths);
+        })
+        .unwrap();
+        watcher.watch(dir, RecursiveMode::NonRecursive).unwrap();
+        act();
+        let mut seen = BTreeSet::new();
+        let until = Instant::now() + wait;
+        while let Some(left) = until.checked_duration_since(Instant::now()) {
+            match rx.recv_timeout(left) {
+                Ok(paths) => seen.extend(paths),
+                Err(_) => break,
+            }
+        }
+        seen
+    }
+
+    #[test]
+    fn the_real_watcher_sees_saves_but_not_reads_or_subfolders() {
+        let dir = std::env::temp_dir().join(format!("phanes-watch-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("sub")).unwrap();
+        let file = dir.join("notes.md");
+        fs::write(&file, "one").unwrap();
+        let wait = Duration::from_millis(400);
+
+        // A plain write, like Phanes' own save.
+        assert!(changes_after(&dir, wait, || fs::write(&file, "two").unwrap()).contains(&file));
+        // An editor's save: write a temporary file, then rename it over the file.
+        let saved = changes_after(&dir, wait, || {
+            fs::write(dir.join(".notes.md.tmp"), "three").unwrap();
+            fs::rename(dir.join(".notes.md.tmp"), &file).unwrap();
+        });
+        assert!(saved.contains(&file), "{saved:?}");
+        // Reading after a change must not report a change again (no loop).
+        assert!(changes_after(&dir, wait, || drop(fs::read_to_string(&file).unwrap())).is_empty());
+        // Subfolders aren't watched: the tree watches each listed folder itself.
+        assert!(changes_after(&dir, wait, || fs::write(dir.join("sub/other.md"), "x").unwrap()).is_empty());
+        // Removing the file.
+        assert!(changes_after(&dir, wait, || fs::remove_file(&file).unwrap()).contains(&file));
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_burst_of_changes_is_one_batch_without_duplicates() {
+        let (tx, rx) = mpsc::channel();
+        let sender = std::thread::spawn(move || {
+            tx.send(vec![PathBuf::from("/w/a.md")]).unwrap();
+            tx.send(vec![PathBuf::from("/w/a.md"), PathBuf::from("/w/b.md")]).unwrap();
+            std::thread::sleep(Duration::from_millis(300));
+            tx.send(vec![PathBuf::from("/w/c.md")]).unwrap();
+        });
+        let mut batches = Vec::new();
+        batch_changes(&rx, Duration::from_millis(100), Duration::from_secs(5), |paths| batches.push(paths));
+        sender.join().unwrap();
+        assert_eq!(batches, vec![vec!["/w/a.md".to_string(), "/w/b.md".to_string()], vec!["/w/c.md".to_string()]]);
+    }
 }
