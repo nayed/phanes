@@ -1,4 +1,4 @@
-import { EditorState, type StateEffect, type Text } from "@codemirror/state";
+import { EditorState, Text, type StateEffect } from "@codemirror/state";
 import type { EditorView, ViewUpdate } from "@codemirror/view";
 import {
   editorExtensions,
@@ -96,6 +96,50 @@ export function getDocState(id: string): EditorState | undefined {
 export function isDocDirty(id: string): boolean {
   const doc = docs.get(id);
   return !!doc && !doc.state.doc.eq(doc.saved);
+}
+
+/** What the document was when last loaded or saved (what's on disk, as far as Phanes knows). */
+export function getDocSavedText(id: string): string {
+  return docs.get(id)?.saved.toString() ?? "";
+}
+
+/** Record `text` as what's on disk, e.g. after another program changed the file. */
+export function setDocSaved(id: string, text: string): void {
+  const doc = docs.get(id);
+  if (doc) doc.saved = toText(text);
+}
+
+/**
+ * Make the document `text` and record it as saved (a reload from disk). Only
+ * the part that differs is replaced, so the cursor and scroll stay where they
+ * are, and it is one undo step: `u` or Ctrl+Z brings the previous text back.
+ * Updates the tab's dirty state only through the view, for the active tab.
+ */
+export function replaceDocText(id: string, text: string): void {
+  const doc = docs.get(id);
+  if (!doc) return;
+  const next = toText(text);
+  doc.saved = next;
+  const before = doc.state.doc.toString();
+  const after = next.toString();
+  if (before === after) return;
+  let from = 0;
+  const shortest = Math.min(before.length, after.length);
+  while (from < shortest && before.charCodeAt(from) === after.charCodeAt(from)) from++;
+  let toBefore = before.length;
+  let toAfter = after.length;
+  while (toBefore > from && toAfter > from && before.charCodeAt(toBefore - 1) === after.charCodeAt(toAfter - 1)) {
+    toBefore--;
+    toAfter--;
+  }
+  const changes = { from, to: toBefore, insert: after.slice(from, toAfter) };
+  if (view && id === activeId) view.dispatch({ changes }); // updates doc.state through its listener
+  else doc.state = doc.state.update({ changes }).state;
+}
+
+/** A Text the way CodeMirror splits lines (`\r\n`, `\r` and `\n` all end one). */
+function toText(text: string): Text {
+  return Text.of(text.split(/\r\n?|\n/));
 }
 
 /** Record the current document as saved. */

@@ -12,6 +12,33 @@
   flex-direction: column;
 }
 
+/*
+ * GNOME-style banner above the editor and preview (DiskBanner): the title
+ * centered, one button at the end, on a light tint of the accent color.
+ */
+.disk-banner {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 46px;
+  padding: 6px 8px 6px 16px;
+  background: color-mix(in srgb, var(--link) 16%, var(--window));
+  color: var(--fg);
+}
+.disk-banner-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
+  font-weight: 600;
+}
+.disk-banner .pill-button {
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+}
+.disk-banner .pill-button:hover {
+  background: color-mix(in srgb, var(--fg) 16%, transparent);
+}
+
 .panes {
   flex: 1 1 auto;
   min-height: 0;

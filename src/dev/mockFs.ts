@@ -54,11 +54,28 @@ export function mockImageUrl(path: string): string | undefined {
   return files.get(path)?.url;
 }
 
+/**
+ * Simulate a change made outside Phanes, from the browser console:
+ * `__mockOutsideChange("/home/nayed/notes/todo.md", "new text")`, or `null`
+ * to delete the file. The watcher's event follows, as from Rust.
+ */
+function installOutsideChanges(): void {
+  (window as unknown as Record<string, unknown>).__mockOutsideChange = async (path: string, text: string | null) => {
+    if (text === null) files.delete(path);
+    else files.set(path, { text });
+    const { emit } = await import("@tauri-apps/api/event");
+    await emit("fs-changed", [path]);
+  };
+}
+
 /** What the fake clipboard holds. */
 let mockClipboard = "";
 
 export function installMockFs(add: (handlers: Handlers) => void): void {
+  installOutsideChanges();
   add({
+    // Outside changes come from __mockOutsideChange instead.
+    watch_dirs: () => null,
     "plugin:path|resolve_directory": () => MOCK_HOME,
     "plugin:dialog|open": () => MOCK_ROOT,
     "plugin:dialog|save": ({ options }) => {

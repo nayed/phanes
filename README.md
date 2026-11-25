@@ -62,6 +62,7 @@ Optional: turn it on from the **Vim** toggle in the status bar or the main menu 
 ### Workspace sidebar
 - Opens a folder as a **file tree**, with markdown files and images, folders first. Hidden files, `.git` and `node_modules` are left out.
 - Remembers which folders were expanded.
+- Follows changes made outside Phanes: files added, removed or renamed in GNOME Files or by `git` show up by themselves.
 - **Recent Folders** in the main menu switches back to the last 5 folders you opened.
 - **Right-click menu**:
   - New File and New Folder, with inline naming.
@@ -76,6 +77,7 @@ Optional: turn it on from the **Vim** toggle in the status bar or the main menu 
 - New untitled documents (`Ctrl+T` or the **+** button).
 - Middle-click or `Ctrl+W` to close a tab, and `Ctrl+Tab` / `Ctrl+Shift+Tab` to cycle through them.
 - If a tab has unsaved changes, Phanes asks before closing it or quitting: **Save, Discard or Cancel**.
+- **Live reload**: when another program (Neovim, `git`…) changes an open file, the tab reloads by itself, keeping your cursor. If you have unsaved changes, they're kept, and a banner offers **Discard and Reload**.
 
 ### Picks up where you left off
 - Reopens your last workspace and tabs on launch. Phanes keeps what it remembers in `~/.local/state/phanes`; `~/.config/phanes` is only for your own files, like the vimrc.
@@ -165,7 +167,7 @@ The AppImage carries its own copy of WebKitGTK, which is why it's much larger th
 | Markdown | [unified](https://unifiedjs.com): `remark-parse` → `remark-gfm` → `remark-rehype` → `rehype-sanitize` → `rehype-stringify`, plus Phanes' own plugins for alerts, local images and source lines |
 | Code highlighting | [Shiki](https://shiki.style), with each color scheme's own light and dark themes |
 | Icons and fonts | [Lucide](https://lucide.dev), Inter and JetBrains Mono (bundled with Fontsource) |
-| Rust side | `gtk` (the window's shadow and its light or dark variant), `trash` (Move to Trash), and Tauri's plugins for file dialogs (through GNOME's portal), opening links and the clipboard |
+| Rust side | `gtk` (the window's shadow and its light or dark variant), `trash` (Move to Trash), `notify` (following changes made outside Phanes), and Tauri's plugins for file dialogs (through GNOME's portal), opening links and the clipboard |
 
 How it fits together on Linux: Tauri opens a **GTK 3** window holding a single **WebKitGTK** web view, and the whole interface is the React app drawn inside it. The frontend asks Rust for anything that touches the system (files, the light/dark preference, the window) through Tauri commands.
 

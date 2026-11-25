@@ -23,6 +23,7 @@ import { installVim } from "./editor/vimCommands";
 import { registerAllCommands } from "./commands/definitions";
 import { setCommandErrorReporter } from "./commands/registry";
 import { showToast } from "./state/dialogs";
+import { installDiskWatch } from "./state/diskChanges";
 import { initSettings } from "./state/settings";
 import { installWindowButtons } from "./state/windowButtons";
 
@@ -39,6 +40,7 @@ async function start() {
   setCommandErrorReporter((err) => showToast(err instanceof Error ? err.message : String(err)));
   installKeybindings();
   installVim();
+  installDiskWatch();
   await Promise.all([installCloseHandler(), installMaximizeTracking(), installTitleBarStyle(), installWindowButtons()]);
 
   // No browser context menu (Reload, Inspect…) except inside text fields and the editor.

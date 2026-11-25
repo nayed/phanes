@@ -3,9 +3,12 @@ import { create } from "zustand";
 import {
   createDoc,
   deleteDoc,
+  getDocSavedText,
   getDocText,
   isDocDirty,
   markDocSaved,
+  replaceDocText,
+  setDocSaved,
   setDocUpdateHandler,
   showDoc,
 } from "../editor/documents";
@@ -25,6 +28,12 @@ export interface Tab {
   dirty: boolean;
   /** The file's line ending, kept when saving. */
   lineEnding: "\n" | "\r\n";
+  /**
+   * Set when another program changed the file while this tab has unsaved
+   * changes ("changed"), or the file is no longer there ("deleted"). A banner
+   * says so (DiskBanner); saving or reloading clears it.
+   */
+  disk?: "changed" | "deleted";
 }
 
 interface TabsStore {
@@ -48,9 +57,12 @@ function patchTab(id: string, patch: Partial<Tab>): void {
 
 setDocUpdateHandler((id, update) => {
   if (update.docChanged) {
-    const dirty = isDocDirty(id);
     const tab = useTabs.getState().tabs.find((t) => t.id === id);
+    // A file that's gone has nothing saved to match, whatever the text.
+    const dirty = isDocDirty(id) || tab?.disk === "deleted";
     if (tab && tab.dirty !== dirty) patchTab(id, { dirty });
+    // Edited back to what's on disk: nothing left to choose between.
+    if (tab?.disk === "changed" && !dirty) patchTab(id, { disk: undefined });
   }
   if (id === useTabs.getState().activeId) useEditorStatus.getState().fromUpdate(update);
 });
@@ -192,11 +204,70 @@ export async function reloadTab(id: string | null = useTabs.getState().activeId)
     });
     if (choice !== "reload") return false;
   }
-  const text = await readTextFile(tab.path);
-  createDoc(tab.id, text);
-  patchTab(tab.id, { dirty: false, lineEnding: text.includes("\r\n") ? "\r\n" : "\n" });
-  if (useTabs.getState().activeId === tab.id) activateTab(tab.id);
+  await discardAndReload(tab.id);
   return true;
+}
+
+/**
+ * Load a tab's file again from disk, replacing its text without asking (the
+ * banner's Discard and Reload). Undo brings the previous text back.
+ */
+export async function discardAndReload(id: string | null = useTabs.getState().activeId): Promise<void> {
+  const tab = useTabs.getState().tabs.find((t) => t.id === id);
+  if (!tab?.path) return;
+  const text = await readTextFile(tab.path);
+  replaceDocText(tab.id, text);
+  patchTab(tab.id, { dirty: false, disk: undefined, lineEnding: lineEndingOf(text) });
+}
+
+const lineEndingOf = (text: string): Tab["lineEnding"] => (text.includes("\r\n") ? "\r\n" : "\n");
+
+/** How CodeMirror holds a file's text: `\n` line endings. */
+const normalized = (text: string) => text.replace(/\r\n?/g, "\n");
+
+/**
+ * The file of a tab changed on disk, or may have (diskChanges.ts calls this
+ * for every change the watcher reports, Phanes' own saves included):
+ *
+ * - Same text as the tab shows, or as last loaded or saved: nothing to do.
+ * - No unsaved changes: reload it, keeping the cursor (live reload).
+ * - Unsaved changes: keep them and show the banner, which offers to discard
+ *   them and reload; saving overwrites the file instead.
+ * - The file is gone (deleted, or moved away): the tab counts as unsaved,
+ *   with a banner, so closing it asks and saving puts the file back.
+ */
+export async function followDiskChange(id: string): Promise<void> {
+  const tab = useTabs.getState().tabs.find((t) => t.id === id);
+  const path = tab?.path;
+  if (!path) return;
+  let text: string | null = null;
+  try {
+    const info = await pathInfo(path);
+    if (info.exists && !info.isDir) text = await readTextFile(path);
+  } catch {
+    return; // unreadable for now (e.g. half written): the next change will tell
+  }
+  const now = useTabs.getState().tabs.find((t) => t.id === id);
+  if (!now || now.path !== path) return; // closed or renamed meanwhile
+  if (text === null) {
+    if (now.disk !== "deleted") patchTab(id, { disk: "deleted", dirty: true });
+    return;
+  }
+  const disk = normalized(text);
+  if (disk === getDocText(id)) {
+    setDocSaved(id, disk);
+    patchTab(id, { disk: undefined, dirty: false, lineEnding: lineEndingOf(text) });
+  } else if (disk === getDocSavedText(id)) {
+    // Phanes' own save, or the file came back as it was.
+    if (now.disk === "deleted") patchTab(id, { disk: undefined, dirty: isDocDirty(id) });
+  } else if (!isDocDirty(id)) {
+    replaceDocText(id, disk);
+    patchTab(id, { disk: undefined, dirty: false, lineEnding: lineEndingOf(text) });
+  } else {
+    // What's on disk is now the saved version: the tab stays unsaved against it.
+    setDocSaved(id, disk);
+    patchTab(id, { disk: "changed", dirty: true });
+  }
 }
 
 async function write(tab: Tab, path: string): Promise<void> {
@@ -205,7 +276,7 @@ async function write(tab: Tab, path: string): Promise<void> {
   const isNew = !(await pathInfo(path)).exists;
   await writeTextFile(path, text);
   markDocSaved(tab.id);
-  patchTab(tab.id, { dirty: false });
+  patchTab(tab.id, { dirty: false, disk: undefined });
   const root = useWorkspace.getState().root;
   if (isNew && root && isInside(path, root)) await refreshTree();
 }

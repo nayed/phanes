@@ -45,7 +45,7 @@ The screens:
 | Code highlighting in preview | **Shiki** with themes `github-light-default` / `github-dark-default` | These are the exact GitHub colors and match the app colorscheme. |
 | Fonts | **Inter** (interface and preview), **JetBrains Mono** (editor and code) | Bundle both locally with `@fontsource/*`. No Google Fonts or any other network request. |
 | Icons in the UI | **lucide-react** | 2 px stroke line icons, matching the designs (folder, file, file-text, image, chevrons, x, plus, menu, panel-left, minus, square, info). |
-| Rust side | Tauri commands for all file access; `notify` crate reserved for the later file watcher; `trash` crate for Move to Trash | |
+| Rust side | Tauri commands for all file access; `notify` crate for the file watcher; `trash` crate for Move to Trash | |
 | Packaging | `.deb`, `.rpm` and AppImage from the Tauri bundler | Arch can use the AppImage or a simple PKGBUILD later. |
 
 ---
@@ -120,7 +120,7 @@ Dragging the header moves the window; double-clicking it toggles maximize.
   - Move to Trash (`Delete`), shown in the danger color. Moves to the system trash, never a permanent delete. Closes any tab for that file (asking first if it has unsaved changes).
   - Right-clicking empty space in the tree offers New File and New Folder at the workspace root.
 - The menu is a GNOME-style popover: 12 px radius, 6 px padding, 32 px items, a separator between groups, shortcuts right-aligned in the muted color. It is keyboard-navigable (arrows, Enter, Escape).
-- Refresh the tree after any change Phanes makes. Picking up changes made outside the app is a later feature.
+- Refresh the tree after any change Phanes makes, and after changes made outside it (see [Changes made outside Phanes](#changes-made-outside-phanes)).
 - Remember the last workspace and reopen it on launch when no argument is given.
 
 ### Tabs
@@ -193,6 +193,18 @@ A command-palette-style popover that opens above the colorscheme name, right-ali
 - Keep the file's line endings when saving.
 - Track unsaved state per tab, shown in the tab and the header subtitle.
 - No autosave in version 1.
+
+### Changes made outside Phanes
+
+Another editor saving an open file (Neovim, say), `git checkout`, files added or removed in GNOME Files: Phanes follows them (`src/state/diskChanges.ts`, the watcher in `src-tauri/src/fs.rs`).
+
+- **An open file without unsaved changes reloads by itself.** Only the part that changed is replaced, so the cursor and scroll stay where they are, and it's one undo step: Ctrl+Z (or Vim's `u`) brings the previous text back.
+- **An open file with unsaved changes keeps them**, and a banner above the editor and preview says **File Has Changed on Disk** with a **Discard and Reload** button, like GNOME Text Editor. Saving overwrites the file with your version and clears the banner; Discard and Reload loads the file's version (undo still brings yours back). Editing the text back to what's on disk clears it too.
+- **An open file that's gone** (deleted, or moved away) keeps its text and counts as unsaved, with a **File Was Moved or Deleted** banner: closing the tab asks first, and saving puts the file back. If the file comes back, the tab follows it like any change.
+- **The tree** refreshes when something changes in a folder it lists (the root and the expanded folders). A collapsed folder is listed when it's expanded, as always.
+- Phanes' own saves come back from the watcher too; a change whose text matches what Phanes last loaded or saved is ignored.
+- The banner is GNOME's: full width under the tab strip, the title centered in semi-bold, one button at the end, on the accent color mixed 16% into the window background.
+- Rust watches only the folders Phanes shows, each without its subfolders: the workspace root, its expanded folders and the folders of open files. Big trees (`node_modules`) never take watches. Changes reach the frontend in bursts (150 ms without a change, at most 1 s), as one `fs-changed` event with the paths. Opening and reading files, and permission or time changes, aren't reported, so reading a file after a change doesn't loop.
 
 ### Theming
 
@@ -325,6 +337,7 @@ Register every one of these in the command registry. Shortcuts follow GNOME conv
 | `folder.new` | New Folder | `Shift+Ctrl+N` |
 | `file.save` | Save | `Ctrl+S` |
 | `file.saveAs` | Save As… | `Shift+Ctrl+S` |
+| `file.reload` | Discard and Reload (the banner's button; undo brings the discarded text back) | |
 | `item.rename` | Rename | `F2` |
 | `item.duplicate` | Duplicate | |
 | `item.copyPath` | Copy Path | `Shift+Ctrl+C` |
@@ -352,7 +365,6 @@ Do not build these now. The foundations above are there so each one is an additi
 
 - ~~Vim keybindings in the editor~~: specified in [`VIM.md`](VIM.md).
 - Command palette (`Shift+Ctrl+P`) and quick open (`Ctrl+P`, fuzzy file search in the workspace).
-- Live reload when a file changes on disk (for example edited in Neovim), and refreshing the tree after outside changes, using the `notify` watcher.
 - Mermaid diagrams and math (`$…$`, `$$…$$` with KaTeX), as remark/rehype plugins.
 - Front matter shown as a metadata card.
 - Outline panel (document headings) as a second sidebar tab.

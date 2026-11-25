@@ -4,6 +4,7 @@ import { EmptyState } from "../components/EmptyState";
 import { HeaderBar } from "../components/HeaderBar";
 import { Sidebar } from "../components/Sidebar";
 import { StatusBar } from "../components/StatusBar";
+import { DiskBanner } from "../components/DiskBanner";
 import { TabStrip } from "../components/TabStrip";
 import { getView } from "../editor/documents";
 import { Editor } from "../editor/Editor";
@@ -44,6 +45,7 @@ export function App() {
           {sidebarVisible && <Sidebar activePath={tab?.path ?? null} onOpenFile={(p) => void openFile(p)} />}
           <div className="main-column">
             {hasTabs && <TabStrip />}
+            {hasTabs && <DiskBanner />}
             <div className="panes" hidden={!hasTabs} data-view={viewMode}>
               <section className="pane pane-editor" aria-label="Markdown source">
                 <Editor />

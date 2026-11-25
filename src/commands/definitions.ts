@@ -2,7 +2,16 @@ import { quit } from "../app/lifecycle";
 import { showPanel } from "../state/dialogs";
 import { useSettings, type ColorSchemePreference, type SchemeId, type ViewMode } from "../state/settings";
 import { copyPath, createItem, duplicateItem, revealItem, startRename, trashItem } from "../state/fileOps";
-import { activeTab, closeTab, cycleTab, newUntitledTab, saveTab, saveTabAs, useTabs } from "../state/tabs";
+import {
+  activeTab,
+  closeTab,
+  cycleTab,
+  discardAndReload,
+  newUntitledTab,
+  saveTab,
+  saveTabAs,
+  useTabs,
+} from "../state/tabs";
 import { chooseWorkspace, clearRecentWorkspaces, openRecentWorkspace, useWorkspace } from "../state/workspace";
 import { registerCommands, type Command, type CommandContext } from "./registry";
 
@@ -109,6 +118,13 @@ export function registerAllCommands(): void {
       shortcut: "Shift+Ctrl+S",
       run: async () => void (await saveTabAs()),
       isEnabled: hasActiveTab,
+    },
+    {
+      // The banner's button when the file changed on disk; undo brings the discarded text back.
+      id: "file.reload",
+      label: "Discard and Reload",
+      run: () => discardAndReload(),
+      isEnabled: () => !!activeTab()?.path,
     },
     { id: "tab.new", label: "New Document", shortcut: "Ctrl+T", run: () => newUntitledTab() },
     {

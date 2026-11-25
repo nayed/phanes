@@ -13,6 +13,7 @@ export type CommandId =
   | "folder.new"
   | "file.save"
   | "file.saveAs"
+  | "file.reload"
   | "item.rename"
   | "item.duplicate"
   | "item.copyPath"
