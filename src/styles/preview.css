@@ -218,6 +218,72 @@
   background: var(--surface);
 }
 
+/*
+ * Front matter (plugins/frontMatter.ts): a card of fields above the document,
+ * each key muted beside its value; lists of words as chips.
+ */
+.markdown-body .front-matter {
+  margin: 0 0 20px;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.markdown-body .front-matter-fields {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 20px;
+  margin: 0;
+}
+/* Each field is a dt/dd pair in a div; the grid lays out the pairs directly. */
+.markdown-body .front-matter-field {
+  display: contents;
+}
+.markdown-body .front-matter dt {
+  color: var(--muted);
+  font-weight: 400;
+}
+.markdown-body .front-matter dd {
+  margin: 0;
+  min-width: 0;
+  white-space: pre-wrap;
+}
+/* Nested fields sit in their value cell, without a card of their own. */
+.markdown-body .front-matter dd .front-matter-fields {
+  gap: 2px 14px;
+}
+.markdown-body .front-matter-empty {
+  color: var(--muted);
+}
+.markdown-body .front-matter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.markdown-body .front-matter-chips li {
+  margin: 0;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--code-inline-bg);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.markdown-body .front-matter-list {
+  margin: 0;
+  padding-left: 18px;
+}
+.markdown-body .front-matter-raw {
+  margin: 0;
+  padding: 0;
+  background: none;
+  white-space: pre-wrap;
+}
+
 /* Code blocks (Shiki emits every theme as a variable; pick by colorscheme and mode). */
 .markdown-body pre {
   padding: 14px 16px;

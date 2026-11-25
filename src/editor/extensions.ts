@@ -5,6 +5,7 @@
  */
 import { defaultKeymap, history, historyKeymap, indentWithTab, redo } from "@codemirror/commands";
 import { markdown, markdownKeymap, markdownLanguage } from "@codemirror/lang-markdown";
+import { yamlFrontmatter } from "@codemirror/lang-yaml";
 import { indentUnit, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
 import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
@@ -165,11 +166,15 @@ export function editorExtensions(hooks: EditorHooks, options: EditorOptions): Ex
     wrapCompartment.of(wrapExtension(options.wrap)),
     indentUnit.of("  "),
     EditorState.tabSize.of(4),
-    markdown({
-      base: markdownLanguage, // GFM: tables, task lists, strikethrough, autolinks
-      codeLanguages: languages, // fenced code highlighted by language (loaded on demand)
-      extensions: [phanesMarkdownTags],
-      addKeymap: false,
+    // A YAML front matter block at the top is YAML, not markdown (without
+    // this, its first line would be a rule and the rest a heading).
+    yamlFrontmatter({
+      content: markdown({
+        base: markdownLanguage, // GFM: tables, task lists, strikethrough, autolinks
+        codeLanguages: languages, // fenced code highlighted by language (loaded on demand)
+        extensions: [phanesMarkdownTags],
+        addKeymap: false,
+      }),
     }),
     syntaxHighlighting(highlighter),
     alertMarkers,

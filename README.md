@@ -22,6 +22,7 @@ In Orphic mythology, **Phanes** is the primordial god hatched from the cosmic eg
 - **Local images** with paths relative to the open file.
 - **Links** open in your default browser. Links to other `.md` files open them in a new tab.
 - **Safe by default**: the preview is sanitized, so no script in a document ever runs.
+- **Front matter** (the YAML block at the top of a blog post or an Obsidian note) shows as a tidy card of fields above the document, with tags as chips.
 - **GitHub alerts**: blockquotes that start with `[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]` or `[!CAUTION]` become colored callouts with an icon. They look like this:
 
 > [!NOTE]
@@ -164,7 +165,7 @@ The AppImage carries its own copy of WebKitGTK, which is why it's much larger th
 | App shell | [Tauri 2](https://tauri.app), with the backend in Rust |
 | Interface | [React 19](https://react.dev) + TypeScript, built with [Vite](https://vite.dev), state in [Zustand](https://zustand.docs.pmnd.rs) |
 | Editor | [CodeMirror 6](https://codemirror.net) with its markdown language |
-| Markdown | [unified](https://unifiedjs.com): `remark-parse` → `remark-gfm` → `remark-rehype` → `rehype-sanitize` → `rehype-stringify`, plus Phanes' own plugins for alerts, local images and source lines |
+| Markdown | [unified](https://unifiedjs.com): `remark-parse` → `remark-frontmatter` → `remark-gfm` → `remark-rehype` → `rehype-sanitize` → `rehype-stringify`, plus Phanes' own plugins for front matter (read with `yaml`), alerts, local images and source lines |
 | Code highlighting | [Shiki](https://shiki.style), with each color scheme's own light and dark themes |
 | Icons and fonts | [Lucide](https://lucide.dev), Inter and JetBrains Mono (bundled with Fontsource) |
 | Rust side | `gtk` (the window's shadow and its light or dark variant), `trash` (Move to Trash), `notify` (following changes made outside Phanes), and Tauri's plugins for file dialogs (through GNOME's portal), opening links and the clipboard |

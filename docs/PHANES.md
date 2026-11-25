@@ -153,6 +153,7 @@ A tab strip above the editor and preview, to the right of the sidebar, as in `01
 - Styled like GitHub's markdown rendering, using the app's CSS variables: Inter 15 px with 1.6 line height, headings with a bottom border on H1 and H2, 720 px max width centered in the pane, 28–36 px padding.
 - Full GFM: tables, task lists (rendered as disabled checkboxes), strikethrough, autolinks, footnotes, and GitHub alerts (`NOTE`, `TIP`, `IMPORTANT`, `WARNING`, `CAUTION`) with their icon, title and colored left rule.
 - Code blocks highlighted by Shiki with the theme matching the current mode.
+- **Front matter**: a YAML block between `---` lines at the very top of a file (the title, date and tags of static site generators or Obsidian's properties) shows as a card above the document, not as markdown (`plugins/frontMatter.ts`, with `remark-frontmatter` and `yaml`). Each key in the muted color beside its value; lists of plain values as chips; nested fields inside their value; `true` / `false` as Yes / No; an empty value as a muted dash. Invalid YAML (or YAML that isn't a list of fields) shows as written, so nothing is hidden; an empty block shows nothing. The card is `--surface` with a 1 px `--border` and an 8 px radius, 14 px text, and is added after sanitizing with everything from the file as text, never HTML. It carries `data-line="1"` for synced scroll. In the editor, the block is highlighted as YAML (`yamlFrontmatter` from `@codemirror/lang-yaml`), so it isn't mistaken for a rule and a heading. Only YAML front matter: TOML's `+++` blocks stay markdown.
 - **Images with relative paths** resolve against the open file's folder and load through Tauri's asset protocol (`convertFileSrc`). Configure the asset protocol scope to the workspace.
 - **Links** (including image links like `[![alt](img.png)](https://…)`) open in the default browser via the Tauri opener plugin, never inside the app. Relative links to other `.md` files open them in a tab.
 - **Sanitize** the HTML (`rehype-sanitize` with GitHub's schema, extended for the classes Shiki and alerts need). No script ever runs from a document. `sample-workspace/projects/markdown-editor.md` includes a `<script>` to check this.
@@ -366,7 +367,6 @@ Do not build these now. The foundations above are there so each one is an additi
 - ~~Vim keybindings in the editor~~: specified in [`VIM.md`](VIM.md).
 - Command palette (`Shift+Ctrl+P`) and quick open (`Ctrl+P`, fuzzy file search in the workspace).
 - Mermaid diagrams and math (`$…$`, `$$…$$` with KaTeX), as remark/rehype plugins.
-- Front matter shown as a metadata card.
 - Outline panel (document headings) as a second sidebar tab.
 - Paste or drop an image: save it to the workspace's `assets/` folder and insert the markdown link.
 - Focus mode: hide sidebar and tabs, dim everything but the current paragraph.
