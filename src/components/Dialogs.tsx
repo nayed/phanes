@@ -150,6 +150,10 @@ const VIM_KEYS: Array<[string, string]> = [
   ["Half page down / up", "Ctrl+D Ctrl+U"],
   ["Page down / up, instead of Find", "Ctrl+F Ctrl+B"],
   ["Increment / decrement, instead of Select All / Cut", "Ctrl+A Ctrl+X"],
+];
+
+/** Vim keys in the preview and the sidebar, when they have focus (docs/VIM.md). */
+const VIM_ELSEWHERE: Array<[string, string]> = [
   ["Preview: scroll, top / bottom, half page", "j k gg G Ctrl+D Ctrl+U"],
   ["Sidebar: move, top / bottom", "j k gg G"],
   ["Sidebar: expand or open / collapse or go up", "l h"],
@@ -169,21 +173,50 @@ const VIM_EX: Array<[string, string]> = [
   ["Show the workspace sidebar", ":Ex"],
   ["Wrapping, line numbers", ":set wrap  :set rnu  :set nu"],
   ["Share the system clipboard", ":set clipboard=unnamedplus"],
-  ["Color scheme and mode, Tab completes", ":theme name [light|dark]"],
+  ["Color scheme and mode, Tab completes", ":theme name [light|dark|system]"],
 ];
 
-function ShortcutKeys({ shortcut }: { shortcut: string }) {
+/** A shortcut (chords separated by spaces, pressed in turn), and any alternatives. */
+function ShortcutKeys({ shortcut, alternatives = [] }: { shortcut: string; alternatives?: string[] }) {
   return (
     <dd>
-      {shortcut.split(" ").map((chord, i) => (
-        <Fragment key={i}>
-          {i > 0 && <span className="shortcuts-then">then</span>}
-          {chord.split("+").map((k, j) => (
-            <kbd key={j}>{k}</kbd>
+      {[shortcut, ...alternatives].map((one, a) => (
+        <Fragment key={a}>
+          {a > 0 && <span className="shortcuts-then">or</span>}
+          {one.split(" ").map((chord, i) => (
+            <Fragment key={i}>
+              {i > 0 && <span className="shortcuts-then">then</span>}
+              {chord.split("+").map((k, j) => (
+                <kbd key={j}>{k}</kbd>
+              ))}
+            </Fragment>
           ))}
         </Fragment>
       ))}
     </dd>
+  );
+}
+
+/** Rows of Vim keys: alternatives separated by a slash. */
+function VimKeyList({ rows }: { rows: Array<[string, string]> }) {
+  return (
+    <dl className="shortcuts-list">
+      {rows.map(([label, keys]) => (
+        <div key={label} className="shortcuts-row">
+          <dt>{label}</dt>
+          <dd>
+            {keys.split(" ").map((chord, i) => (
+              <Fragment key={i}>
+                {i > 0 && <span className="shortcuts-then">/</span>}
+                {chord.split("+").map((k, j) => (
+                  <kbd key={j}>{k}</kbd>
+                ))}
+              </Fragment>
+            ))}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -204,38 +237,31 @@ function ShortcutsDialog() {
             label: c.label,
             scope: c.scope === "tree" ? "in the file tree" : null,
             shortcut: c.shortcut!,
+            alternatives: c.altShortcuts ?? [],
           })),
-          ...EDITOR_KEYS.map(([label, shortcut]) => ({ key: label, label, scope: "in the editor", shortcut })),
+          ...EDITOR_KEYS.map(([label, shortcut]) => ({
+            key: label,
+            label,
+            scope: "in the editor",
+            shortcut,
+            alternatives: [] as string[],
+          })),
         ].map((row) => (
           <div key={row.key} className="shortcuts-row">
             <dt>
               {row.label}
               {row.scope && <span className="shortcuts-scope"> ({row.scope})</span>}
             </dt>
-            <ShortcutKeys shortcut={row.shortcut} />
+            <ShortcutKeys shortcut={row.shortcut} alternatives={row.alternatives} />
           </div>
         ))}
       </dl>
 
       <h3 className="shortcuts-section">Vim mode</h3>
       <p className="shortcuts-note">While the editor has focus, these keys go to Vim:</p>
-      <dl className="shortcuts-list">
-        {VIM_KEYS.map(([label, keys]) => (
-          <div key={label} className="shortcuts-row">
-            <dt>{label}</dt>
-            <dd>
-              {keys.split(" ").map((chord, i) => (
-                <Fragment key={i}>
-                  {i > 0 && <span className="shortcuts-then">/</span>}
-                  {chord.split("+").map((k, j) => (
-                    <kbd key={j}>{k}</kbd>
-                  ))}
-                </Fragment>
-              ))}
-            </dd>
-          </div>
-        ))}
-      </dl>
+      <VimKeyList rows={VIM_KEYS} />
+      <p className="shortcuts-note">When the preview or the sidebar has focus:</p>
+      <VimKeyList rows={VIM_ELSEWHERE} />
       <p className="shortcuts-note">Ex commands:</p>
       <dl className="shortcuts-list">
         {VIM_EX.map(([label, ex]) => (

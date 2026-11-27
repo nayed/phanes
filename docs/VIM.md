@@ -51,11 +51,13 @@ Keep this state in the app store (`state/`) per tab, so the status bar re-render
 
 ## Settings
 
+Saved in `state.json` with the other settings (`src/state/settings.ts`):
+
 | Setting | Default | Where it's set |
 | --- | --- | --- |
-| `editor.vimMode` | off | Main menu checkbox **Vim Mode**; the **Vim** toggle in the status bar; command `editor.toggleVim` |
-| `editor.vimSystemClipboard` | on | Main menu → Vim Mode options, or `:set clipboard=unnamedplus` / `:set clipboard=` |
-| `editor.relativeLineNumbers` | off | Main menu, or `:set rnu` / `:set nornu` |
+| `vimMode` | off | Main menu checkbox **Vim Mode**; the **Vim** toggle in the status bar; command `editor.toggleVim` |
+| `vimSystemClipboard` | on | Main menu → Vim Options → **Use System Clipboard**, or `:set clipboard=unnamedplus` / `:set clipboard=` |
+| `relativeLineNumbers` | off | Main menu (**Relative Line Numbers**), or `:set rnu` / `:set nornu` |
 
 All three persist like the other settings. Relative line numbers work with or without Vim mode (current line shows its absolute number, the others show distance).
 
@@ -64,6 +66,7 @@ Register in the command registry:
 | Id | Label | Shortcut |
 | --- | --- | --- |
 | `editor.toggleVim` | Vim Mode | none by default |
+| `editor.toggleVimClipboard` | Use System Clipboard | none |
 | `editor.toggleRelativeNumbers` | Relative Line Numbers | none |
 
 ---
@@ -167,7 +170,7 @@ Register these once at startup with `Vim.defineEx(name, prefix, handler)`. Each 
 | `:set wrap` / `:set nowrap` | editor line wrapping | |
 | `:set rnu` / `:set nornu`, `:set nu` / `:set nonu` | `editor.toggleRelativeNumbers` / line numbers | |
 | `:set clipboard=unnamedplus` / `:set clipboard=` | `editor.vimSystemClipboard` | |
-| `:theme name` | colorscheme | Phanes extra. `:theme gruvbox`, `:theme catppuccin dark`; Tab-completes scheme names. |
+| `:theme name [light\|dark\|system]` | colorscheme | Phanes extra. `:theme gruvbox`, `:theme catppuccin dark`, `:theme everforest system`; alone, it shows the current scheme and mode; Tab-completes scheme names. |
 | `:noh` | clear search highlight | Built into the extension |
 
 `gt` / `gT`: use `Vim.defineAction` + `Vim.mapCommand` (or `Vim.map("gt", ":tabn<CR>")`) so they go through the same commands.

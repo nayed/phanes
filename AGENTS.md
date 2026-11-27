@@ -24,7 +24,7 @@ npm run tauri build                             # .deb, .rpm and AppImage in src
 
 ## Architecture rules
 
-1. **All file access goes through one place**: Rust commands in `src-tauri/src/fs.rs`, called only from `src/lib/fs.ts`. Components never touch files directly.
+1. **All file access goes through one place**: Rust commands in `src-tauri/src/fs.rs`, called only from `src/lib/fs.ts`. Components never touch files directly. (Phanes' own state files are the one exception: `state.json` through `app_state.rs` / `src/lib/appState.ts`, and `window.json` in `window_state.rs`, all in `state_dir.rs`'s folder.)
 2. **Every user action is a command** in `src/commands/` (id, label, optional shortcut, handler). Menus, the right-click menu and shortcuts all read from that registry; don't wire an action to a single button.
 3. **Colors only through CSS variables** defined per colorscheme in `src/styles/tokens.css`. No hex values in components. A new colorscheme is a light and a dark block of variables, plus the few registrations listed at the top of `src/app/theme.ts` (its id, Shiki code themes, menu command).
 4. **Markdown features are unified plugins** added to the pipeline in `src/markdown/render.ts`. Keep `data-line` source positions on blocks (synced scroll needs them), and extend the sanitize schema in `src/markdown/plugins/schema.ts` for any new class or element instead of loosening it.

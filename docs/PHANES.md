@@ -40,9 +40,9 @@ The screens:
 | --- | --- | --- |
 | App shell | **Tauri 2** | Uses WebKitGTK on Linux. Binary name `phanes`, app identifier `io.nayed.Phanes`, product name `Phanes`. |
 | UI | **React + TypeScript + Vite** | Function components and hooks. Keep state simple (React state/context or a small store like Zustand); no heavy framework. |
-| Editor | **CodeMirror 6** | `@codemirror/lang-markdown` with the GFM extensions. Never a plain `<textarea>`: later features (vim mode, focus mode, synced scroll) are CodeMirror extensions. |
-| Markdown → HTML | **unified**: `remark-parse` → `remark-gfm` → `remark-rehype` → `rehype-sanitize` → `rehype-stringify` | Each later feature (math, Mermaid, front matter) is one more plugin. Add a plugin for GitHub alerts (`> [!NOTE]` etc.). |
-| Code highlighting in preview | **Shiki** with themes `github-light-default` / `github-dark-default` | These are the exact GitHub colors and match the app colorscheme. |
+| Editor | **CodeMirror 6** | `@codemirror/lang-markdown` with the GFM extensions. Never a plain `<textarea>`: features like Vim mode and synced scroll (and later focus mode) are CodeMirror extensions. |
+| Markdown → HTML | **unified**: `remark-parse` → `remark-frontmatter` → `remark-gfm` → `remark-rehype` → `rehype-raw` → `rehype-sanitize` → `rehype-stringify`, with Phanes' own plugins in between (`src/markdown/render.ts`) | Each later feature (math, Mermaid) is one more plugin. Front matter, GitHub alerts (`> [!NOTE]` etc.), code highlighting and local images are plugins already. |
+| Code highlighting in preview | **Shiki**, with each colorscheme's own light and dark theme (`src/markdown/plugins/highlight.ts`; GitHub Default uses `github-light-default` / `github-dark-default`) | Code colors match the app colorscheme, adjusted to 4.5:1 contrast on its code background. |
 | Fonts | **Inter** (interface and preview), **JetBrains Mono** (editor and code) | Bundle both locally with `@fontsource/*`. No Google Fonts or any other network request. |
 | Icons in the UI | **lucide-react** | 2 px stroke line icons, matching the designs (folder, file, file-text, image, chevrons, x, plus, menu, panel-left, minus, square, info). |
 | Rust side | Tauri commands for all file access; `notify` crate for the file watcher; `trash` crate for Move to Trash | |
@@ -86,7 +86,7 @@ phanes/
 
 ### Window and header bar
 
-GNOME/libadwaita look. Use a custom title bar (`decorations: false` with `data-tauri-drag-region` on the header) so the header bar matches the design. The window has rounded corners (12 px) and the system shadow.
+GNOME/libadwaita look. On GNOME the header bar is drawn by Phanes (`data-tauri-drag-region` on it): the window keeps GTK's client-side decorations, for GNOME's shadow and resize edges, but `src-tauri/src/window.rs` replaces GTK's title bar with an empty widget. On other desktops the window manager draws its own title bar (see AGENTS.md, "Two title bars"). The window has rounded corners (12 px) and the system shadow.
 
 That is the window on GNOME (and Pantheon and Budgie, whose apps also use header bars). On every other desktop (KDE Plasma, Xfce, Cinnamon, MATE, tiling compositors…) Phanes uses the **system title bar**: the desktop's window manager draws the title bar, window buttons and borders in the user's theme, the header bar below it is a plain toolbar without window controls, and the window has square corners. The choice is made at startup from `XDG_CURRENT_DESKTOP` (`src-tauri/src/window.rs`); `PHANES_TITLE_BAR=own` or `PHANES_TITLE_BAR=system` overrides it. The window's title is `<file name> — Phanes`. Under a system title bar the header bar's title shows only the second line (folder and save state), since the file name is already above it.
 
@@ -97,7 +97,7 @@ Header bar, 48 px tall, from left to right:
 - **Sidebar toggle** (panel-left icon). Shows and hides the workspace sidebar. Shown in its pressed state while the sidebar is visible.
 - **Title**, centered: the active file's name in bold, and below it the workspace path and save state, e.g. `~/notes · Saved` or `~/notes · Unsaved changes`. Abbreviate the home directory as `~`.
 - **View switcher**: a segmented control with *Editor*, *Split*, *Preview*. The active segment is raised (window background, small shadow, semi-bold).
-- **Main menu** (hamburger). Items: Open Folder…, Recent Folders ▸ (the last 5 folders opened, other than the open one, shown with `~`; then Clear Recent Folders; hidden when empty; a folder that can't be opened anymore leaves the list), New File, Save, Save As…, Color scheme ▸ (Follow System / Light / Dark), Show Sidebar, Keyboard Shortcuts, About Phanes, Quit.
+- **Main menu** (hamburger). Items: Open Folder…, Recent Folders ▸ (the last 5 folders opened, other than the open one, shown with `~`; then Clear Recent Folders; hidden when empty; a folder that can't be opened anymore leaves the list), New File, Save, Save As…, Color Scheme ▸ (the colorschemes, alphabetical, then Follow System / Light / Dark), Show Sidebar, Vim Mode, Vim Options ▸ (Use System Clipboard), Relative Line Numbers, Keyboard Shortcuts, About Phanes, Quit.
 - **Window controls**: minimize, maximize/restore, close. Round 24 px buttons with 12 px icons, 10 px apart, on the right. Which buttons show, and on which side, follows the desktop's button layout (GNOME Tweaks › Windows › Titlebar Buttons; GTK's `gtk-decoration-layout`), also while Phanes is running: buttons placed on the left come before the sidebar toggle.
 
 Dragging the header moves the window; double-clicking it toggles maximize.
@@ -156,7 +156,7 @@ A tab strip above the editor and preview, to the right of the sidebar, as in `01
 - **Front matter**: a YAML block between `---` lines at the very top of a file (the title, date and tags of static site generators or Obsidian's properties) shows as a card above the document, not as markdown (`plugins/frontMatter.ts`, with `remark-frontmatter` and `yaml`). Each key in the muted color beside its value; lists of plain values as chips; nested fields inside their value; `true` / `false` as Yes / No; an empty value as a muted dash. Invalid YAML (or YAML that isn't a list of fields) shows as written, so nothing is hidden; an empty block shows nothing. The card is `--surface` with a 1 px `--border` and an 8 px radius, 14 px text, and is added after sanitizing with everything from the file as text, never HTML. It carries `data-line="1"` for synced scroll. In the editor, the block is highlighted as YAML (`yamlFrontmatter` from `@codemirror/lang-yaml`), so it isn't mistaken for a rule and a heading. Only YAML front matter: TOML's `+++` blocks stay markdown.
 - **Images with relative paths** resolve against the open file's folder and load through Tauri's asset protocol (`convertFileSrc`). Configure the asset protocol scope to the workspace.
 - **Links** (including image links like `[![alt](img.png)](https://…)`) open in the default browser via the Tauri opener plugin, never inside the app. Relative links to other `.md` files open them in a tab.
-- **Sanitize** the HTML (`rehype-sanitize` with GitHub's schema, extended for the classes Shiki and alerts need). No script ever runs from a document. `sample-workspace/projects/markdown-editor.md` includes a `<script>` to check this.
+- **Sanitize** the HTML (`rehype-sanitize` with GitHub's schema, plus the `data-line` attribute for synced scroll). Alerts, Shiki highlighting and the front matter card are added after sanitizing, so the schema never needs their classes. No script ever runs from a document. `sample-workspace/projects/markdown-editor.md` includes a `<script>` to check this.
 
 ### View modes
 
@@ -210,7 +210,7 @@ Another editor saving an open file (Neovim, say), `git checkout`, files added or
 ### Theming
 
 - Five colorschemes: **GitHub Default**, **Gruvbox**, **Catppuccin** (Latte for light, Mocha for dark), **Everforest** and **Horizon** (Horizon Bright for light), each in light and dark variants (see [Design tokens](#design-tokens)). Pick one from the main menu's Color Scheme submenu or from the status bar.
-- Default to following the system: GNOME's dark style preference arrives through `prefers-color-scheme` in WebKitGTK. The main menu can force Light or Dark. Remember the choice.
+- Default to following the system: GNOME's dark style preference comes from the desktop portal (`src-tauri/src/system_theme.rs`), since WebKitGTK's `prefers-color-scheme` doesn't follow it; the frontend then sets GTK's own light or dark variant with `set_gtk_dark`. The main menu can force Light or Dark. Remember the choice.
 - Structure the CSS so another colorscheme (Tokyo Night, Nord…) is one more set of variable values.
 
 ### Command line
@@ -239,7 +239,7 @@ Terminal=false
 Type=Application
 Categories=Utility;TextEditor;
 MimeType=text/markdown;text/x-markdown;
-StartupWMClass=phanes
+StartupWMClass=Phanes
 ```
 
 ---
@@ -344,11 +344,15 @@ Register every one of these in the command registry. Shortcuts follow GNOME conv
 | `item.copyPath` | Copy Path | `Shift+Ctrl+C` |
 | `item.reveal` | Open in Files | |
 | `item.trash` | Move to Trash | `Delete` (when the tree has focus) |
+| `tab.new` | New Document | `Ctrl+T` |
 | `tab.close` | Close Tab | `Ctrl+W` |
-| `tab.next` / `tab.previous` | Next / Previous Tab | `Ctrl+Tab` / `Shift+Ctrl+Tab` |
+| `tab.next` / `tab.previous` | Next / Previous Tab | `Ctrl+Tab` / `Shift+Ctrl+Tab` (also `Ctrl+PageDown` / `Ctrl+PageUp`) |
 | `view.editor` / `view.split` / `view.preview` | Editor / Split / Preview | `Ctrl+1` / `Ctrl+2` / `Ctrl+3` |
 | `view.toggleSidebar` | Show Sidebar | `F9` |
 | `view.toggleSyncScroll` | Synced Scroll | |
+| `editor.toggleVim` | Vim Mode (see [`VIM.md`](VIM.md)) | |
+| `editor.toggleVimClipboard` | Use System Clipboard (Vim Options) | |
+| `editor.toggleRelativeNumbers` | Relative Line Numbers | |
 | `theme.system` / `theme.light` / `theme.dark` | Follow System / Light / Dark | |
 | `theme.cycle` | Switch Color Mode (Follow System → Light → Dark) | |
 | `scheme.githubDefault` / `scheme.gruvbox` / `scheme.catppuccin` / `scheme.everforest` / `scheme.horizon` | GitHub Default / Gruvbox / Catppuccin / Everforest / Horizon | |

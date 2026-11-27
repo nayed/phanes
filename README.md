@@ -18,7 +18,7 @@ In Orphic mythology, **Phanes** is the primordial god hatched from the cosmic eg
 
 ### GitHub Flavored Markdown
 - Tables, task lists, strikethrough, autolinks and footnotes.
-- **Code blocks highlighted with Shiki**, using GitHub's own light and dark themes.
+- **Code blocks highlighted with Shiki**, using each color scheme's own light and dark themes.
 - **Local images** with paths relative to the open file.
 - **Links** open in your default browser. Links to other `.md` files open them in a new tab.
 - **Safe by default**: the preview is sanitized, so no script in a document ever runs.
@@ -54,7 +54,7 @@ Optional: turn it on from the **Vim** toggle in the status bar or the main menu 
 - Motions, operators, text objects, Visual modes, registers, macros, marks and `/` search, from [`@replit/codemirror-vim`](https://github.com/replit/codemirror-vim).
 - A **mode pill** in the status bar (NORMAL, INSERT, VISUAL, V-LINE, V-BLOCK, REPLACE, COMMAND) in the colorscheme's own colors, with pending keys (`2d`), `recording @q` and the selection size.
 - A block cursor, Visual selections tinted to match the pill, and a command line at the bottom of the editor with a match count for searches.
-- Ex commands that act like the menus: `:w`, `:wa`, `:q`, `:wq`, `:x`, `:qa`, `:e path`, `:tabnew`, `:tabn` / `:tabp` (and `gt` / `gT`), `:Ex`, `:set wrap` / `rnu` / `nu` / `clipboard`, and `:theme name [light|dark]`. Tab completes command names (`:` then Tab lists them all), paths after `:e` and color schemes after `:theme`.
+- Ex commands that act like the menus: `:w`, `:wa`, `:q`, `:wq`, `:x`, `:qa`, `:e path`, `:tabnew`, `:tabn` / `:tabp` (and `gt` / `gT`), `:Ex`, `:set wrap` / `rnu` / `nu` / `clipboard`, and `:theme name [light|dark|system]`. Tab completes command names (`:` then Tab lists them all), paths after `:e` and color schemes after `:theme`.
 - Yank and paste share the system clipboard (`clipboard=unnamedplus`, on by default).
 - Vim keys in the preview (`j` / `k`, `gg` / `G`, `Ctrl+D` / `Ctrl+U`) and the sidebar (`j` / `k`, `h` / `l`).
 - A **vimrc** at `~/.config/phanes/vimrc` for mappings, `let mapleader` and `set` (for example `imap jk <Esc>`); lines Phanes doesn't support are listed in the status bar.
@@ -105,7 +105,7 @@ phanes .              # open the current directory
 A path that doesn't exist opens as a new, unsaved file at that path.
 
 ### Keyboard first
-Every action has a shortcut. Press `Ctrl+?` to see them all.
+Most actions have a shortcut. Press `Ctrl+?` to see them all.
 
 ### Private
 No accounts, no telemetry and no network access. The fonts (Inter and JetBrains Mono) ship with the app.
@@ -165,10 +165,10 @@ The AppImage carries its own copy of WebKitGTK, which is why it's much larger th
 | App shell | [Tauri 2](https://tauri.app), with the backend in Rust |
 | Interface | [React 19](https://react.dev) + TypeScript, built with [Vite](https://vite.dev), state in [Zustand](https://zustand.docs.pmnd.rs) |
 | Editor | [CodeMirror 6](https://codemirror.net) with its markdown language |
-| Markdown | [unified](https://unifiedjs.com): `remark-parse` → `remark-frontmatter` → `remark-gfm` → `remark-rehype` → `rehype-sanitize` → `rehype-stringify`, plus Phanes' own plugins for front matter (read with `yaml`), alerts, local images and source lines |
+| Markdown | [unified](https://unifiedjs.com): `remark-parse` → `remark-frontmatter` → `remark-gfm` → `remark-rehype` → `rehype-raw` → `rehype-sanitize` → `rehype-stringify`, plus Phanes' own plugins for front matter (read with `yaml`), alerts, local images and source lines |
 | Code highlighting | [Shiki](https://shiki.style), with each color scheme's own light and dark themes |
 | Icons and fonts | [Lucide](https://lucide.dev), Inter and JetBrains Mono (bundled with Fontsource) |
-| Rust side | `gtk` (the window's shadow and its light or dark variant), `trash` (Move to Trash), `notify` (following changes made outside Phanes), and Tauri's plugins for file dialogs (through GNOME's portal), opening links and the clipboard |
+| Rust side | `gtk` (the window's shadow and its light or dark variant), `dbus` (GNOME's light/dark preference from the desktop portal), `trash` (Move to Trash), `notify` (following changes made outside Phanes), and Tauri's plugins for file dialogs (through GNOME's portal), opening links and the clipboard |
 
 How it fits together on Linux: Tauri opens a **GTK 3** window holding a single **WebKitGTK** web view, and the whole interface is the React app drawn inside it. The frontend asks Rust for anything that touches the system (files, the light/dark preference, the window) through Tauri commands.
 
@@ -181,7 +181,7 @@ React app (HTML/CSS/TS)     src/
 
 
 ### Requirements
-- [Node.js](https://nodejs.org) 22 or later, with npm
+- [Node.js](https://nodejs.org) 22.12 or later, with npm (GitHub's builds use Node.js 26)
 - A Rust toolchain, installed with [rustup](https://rustup.rs)
 - The system libraries below
 
@@ -248,11 +248,12 @@ On Arch, or any other distribution, make the AppImage executable and run it:
 
 ```bash
 chmod +x src-tauri/target/release/bundle/appimage/Phanes_*.AppImage
+./src-tauri/target/release/bundle/appimage/Phanes_*.AppImage
 ```
 
 The AppImage is much larger (about 120 MB against 8 MB) because it bundles WebKitGTK and its libraries instead of using the system's.
 
-Packages built on your machine only run on systems with the same C library (glibc) or newer. Published releases are built by GitHub instead, see below.
+Packages built on your machine only run on systems with the same C library (glibc) or newer. Published releases are built by GitHub instead: see [`docs/ci-cd.md`](docs/ci-cd.md).
 
 ### Layout
 
@@ -263,10 +264,11 @@ Packages built on your machine only run on systems with the same C library (glib
 | `src/editor/` | CodeMirror setup (`extensions.ts`) and per-tab editor state |
 | `src/markdown/` | The unified pipeline (`render.ts`), its plugins and the preview |
 | `src/commands/` | The command registry and keyboard shortcuts |
-| `src/lib/fs.ts` | The only module that talks to Rust about files |
-| `src/state/` | Settings, workspace, tabs, file operations |
+| `src/lib/fs.ts` | The only module that talks to Rust about files (and the file watcher) |
+| `src/dev/` | The fake backend for `npm run dev` in a browser (`browserMock.ts`, `mockFs.ts`) |
+| `src/state/` | Settings, workspace, tabs, file operations, outside changes |
 | `src/styles/` | `tokens.css` (colorschemes) and the rest of the CSS |
-| `src-tauri/src/` | `fs.rs` (all file access), `cli.rs`, `window.rs`, `app_state.rs` |
+| `src-tauri/src/` | `fs.rs` (all file access and the watcher), `cli.rs` (command-line arguments), `window.rs` (title bar style), `window_state.rs` (window size), `app_state.rs` and `state_dir.rs` (saved state in `~/.local/state/phanes`), `system_theme.rs` and `gtk_theme.rs` (light/dark), `appimage.rs` (AppImage launcher and wrappers) |
 
 ---
 ## License
